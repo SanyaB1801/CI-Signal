@@ -1,0 +1,41 @@
+[
+  {
+    "id": "regression",
+    "name": "Repeatable assertion failure",
+    "description": "A test fails with the same assertion on every attempt.",
+    "log": "============================= test session starts =============================\ncollected 1 item\n\ntests/test_pricing.py::test_rounding FAILED\nE       assert 9.99 == 10.0\nE        + where 9.99 = calculate_total(19.99, 0.5)\n\nAssertionError: expected 10.00, got 9.99",
+    "attempts": [
+      {"status": "failed", "detail": "AssertionError: expected 10.00, got 9.99"},
+      {"status": "failed", "detail": "AssertionError: expected 10.00, got 9.99"},
+      {"status": "failed", "detail": "AssertionError: expected 10.00, got 9.99"}
+    ]
+  },
+  {
+    "id": "flaky",
+    "name": "Intermittent timeout",
+    "description": "The same test alternates between a timeout and a pass.",
+    "log": "============================= test session starts =============================\ncollected 1 item\n\ntests/test_api.py::test_profile_timeout FAILED\nrequests.exceptions.ReadTimeout: HTTPSConnectionPool(host='api.example.test', port=443): Read timed out.\n\nThe initial CI attempt failed while waiting for the profile response.",
+    "attempts": [
+      {"status": "failed", "detail": "ReadTimeout while waiting for profile response"},
+      {"status": "passed", "detail": "test_profile_timeout passed"},
+      {"status": "failed", "detail": "ReadTimeout while waiting for profile response"}
+    ]
+  },
+  {
+    "id": "environment",
+    "name": "Missing dependency",
+    "description": "The test process cannot import a required package.",
+    "log": "============================= test session starts =============================\nImportError while loading conftest 'tests/conftest.py'.\nModuleNotFoundError: No module named 'yaml'\n\nERROR: test collection failed before tests could run.",
+    "attempts": [
+      {"status": "failed", "detail": "ModuleNotFoundError: No module named 'yaml'"},
+      {"status": "failed", "detail": "ModuleNotFoundError: No module named 'yaml'"}
+    ]
+  },
+  {
+    "id": "unknown",
+    "name": "Not enough evidence",
+    "description": "A generic failure with no useful retry observations.",
+    "log": "The CI job exited with status 1. No test name or traceback was captured.",
+    "attempts": []
+  }
+]

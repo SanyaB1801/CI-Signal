@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CI Signal — Failure Triage</title>
+  <style>
+    :root { color-scheme: dark; --bg:#101412; --panel:#171d19; --panel-2:#1d2620; --line:#2b3830; --ink:#edf4ed; --muted:#9aa99d; --green:#b9f36b; --mint:#68d9a3; --amber:#ffc66d; --red:#ff897d; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(ellipse at 12% 0%,#1e3022 0,transparent 32%),var(--bg); color:var(--ink); font:15px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .shell { max-width:1180px; margin:0 auto; padding:32px 24px 56px; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:36px; }
+    .brand { display:flex; align-items:center; gap:12px; font-weight:750; letter-spacing:-.03em; font-size:18px; }
+    .mark { display:grid; place-items:center; width:38px; height:38px; border-radius:12px; background:var(--green); color:#14200e; font-size:20px; box-shadow:0 0 35px #b9f36b27; }
+    .protocol { color:var(--muted); border:1px solid var(--line); padding:7px 11px; border-radius:999px; font-size:12px; }
+    .hero { max-width:760px; margin-bottom:26px; }
+    .eyebrow { color:var(--green); text-transform:uppercase; letter-spacing:.16em; font-size:11px; font-weight:750; }
+    h1 { font-size:clamp(34px,5vw,54px); line-height:1.03; letter-spacing:-.055em; margin:10px 0 12px; }
+    .hero p { color:var(--muted); font-size:16px; margin:0; max-width:640px; }
+    .grid { display:grid; grid-template-columns:minmax(300px,.9fr) minmax(400px,1.35fr); gap:18px; align-items:start; }
+    .panel { border:1px solid var(--line); background:linear-gradient(155deg,#1a211c,#141916); border-radius:18px; overflow:hidden; box-shadow:0 20px 60px #0002; }
+    .panel-head { padding:18px 20px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .panel-head h2 { font-size:14px; margin:0; letter-spacing:.01em; }
+    .step { color:var(--muted); font:11px ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .panel-body { padding:20px; }
+    label { display:block; font-weight:650; font-size:13px; margin:0 0 8px; }
+    select,textarea { width:100%; color:var(--ink); border:1px solid #35433a; background:#101511; border-radius:11px; padding:12px 13px; font:inherit; outline:none; }
+    select:focus,textarea:focus { border-color:var(--mint); box-shadow:0 0 0 3px #68d9a31c; }
+    .hint { color:var(--muted); font-size:12px; margin:8px 0 18px; }
+    textarea { min-height:236px; resize:vertical; font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; color:#c7d4ca; }
+    textarea.attempt-input { min-height:92px; }
+    button { border:0; border-radius:11px; padding:12px 16px; background:var(--green); color:#14200e; font-weight:800; font-size:14px; cursor:pointer; width:100%; transition:transform .15s,filter .15s; }
+    button:hover { filter:brightness(1.07); transform:translateY(-1px); }
+    button:disabled { cursor:wait; opacity:.65; transform:none; }
+    .note { display:flex; gap:9px; color:var(--muted); font-size:12px; margin-top:14px; }
+    .note span { color:var(--mint); }
+    .empty { min-height:390px; display:grid; place-items:center; text-align:center; color:var(--muted); padding:34px; }
+    .empty-icon { width:54px; height:54px; display:grid; place-items:center; border:1px solid var(--line); border-radius:17px; margin:0 auto 14px; color:var(--green); font-size:23px; }
+    .empty strong { color:var(--ink); display:block; margin-bottom:5px; }
+    .results { display:none; }
+    .diagnosis { padding:22px 22px 18px; border-bottom:1px solid var(--line); }
+    .badge { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--line); background:#202921; border-radius:999px; padding:6px 10px; font-size:11px; color:var(--mint); font-weight:750; }
+    .badge[data-kind="regression"] { color:var(--red); background:#321d1b; border-color:#57302d; }
+    .badge[data-kind="flaky"] { color:var(--amber); background:#322919; border-color:#554222; }
+    .badge[data-kind="environment"] { color:#9fc7ff; background:#1b293a; border-color:#304767; }
+    .badge[data-kind="inconclusive"] { color:var(--muted); }
+    .result-title { font-size:25px; letter-spacing:-.04em; margin:13px 0 6px; }
+    .reason { color:#c4d0c6; margin:0; }
+    .meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+    .chip { color:var(--muted); font-size:11px; border:1px solid var(--line); background:#121814; padding:5px 8px; border-radius:7px; }
+    .section { padding:17px 22px; border-bottom:1px solid var(--line); }
+    .section:last-child { border-bottom:0; }
+    .section h3 { color:var(--muted); text-transform:uppercase; letter-spacing:.1em; font-size:10px; margin:0 0 11px; }
+    .recommend { color:var(--ink); background:#1a241c; border-left:2px solid var(--green); padding:11px 13px; border-radius:0 9px 9px 0; font-size:13px; }
+    .evidence { display:grid; gap:8px; }
+    .evidence-item { border:1px solid var(--line); background:#111713; padding:9px 11px; border-radius:9px; font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; color:#c5d4c8; overflow-wrap:anywhere; }
+    .evidence-item b { color:var(--mint); font-weight:600; margin-right:8px; }
+    .attempts { display:flex; flex-wrap:wrap; gap:6px; }
+    .attempt { padding:5px 8px; border-radius:7px; font-size:11px; background:#17231a; color:var(--mint); border:1px solid #2a4932; }
+    .attempt.failed { color:var(--red); background:#291a19; border-color:#4d2a28; }
+    .trace { display:grid; gap:8px; }
+    .trace-row { display:grid; grid-template-columns:28px 1fr auto; align-items:start; gap:9px; font-size:12px; }
+    .trace-icon { display:grid; place-items:center; width:25px; height:25px; border-radius:8px; color:var(--green); background:#243222; }
+    .trace-title { font-weight:700; }
+    .trace-detail { color:var(--muted); font-size:11px; margin-top:2px; }
+    .trace-state { color:var(--mint); font:10px ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .error { display:none; margin-top:12px; color:var(--red); font-size:12px; }
+    footer { color:#708075; font-size:11px; margin-top:18px; text-align:center; }
+    @media(max-width:820px) { .grid { grid-template-columns:1fr; } .empty { min-height:190px; } }
+    @media(max-width:520px) { .shell { padding:22px 14px 40px; } header { margin-bottom:26px; } .protocol { display:none; } .panel-body { padding:15px; } .diagnosis,.section { padding-left:16px; padding-right:16px; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="brand"><div class="mark">⌁</div><span>CI Signal</span></div>
+      <div class="protocol">A2A 1.0 · Manual input · No API key</div>
+    </header>
+    <section class="hero">
+      <div class="eyebrow">Failure triage, with evidence</div>
+      <h1>Know what kind of failure<br>you’re looking at.</h1>
+      <p>Two independent agents inspect a CI log and retry history. The coordinator brings their findings together—then shows you exactly how.</p>
+    </section>
+    <section class="grid">
+      <article class="panel">
+        <div class="panel-head"><h2>Investigate a CI failure</h2><span class="step">01 / INPUT</span></div>
+        <div class="panel-body">
+          <label for="scenario">Example input <span class="step">OPTIONAL</span></label>
+          <select id="scenario"></select>
+          <p class="hint" id="scenarioDescription"></p>
+          <label for="log">CI log</label>
+          <textarea id="log" spellcheck="false" placeholder="Paste the failed job's relevant CI log here…"></textarea>
+          <p class="hint">Paste the log text, not just an error code. Maximum 100 KB.</p>
+          <label for="attempts">Observed attempt outcomes <span class="step">OPTIONAL</span></label>
+          <textarea id="attempts" class="attempt-input" spellcheck="false" placeholder="failed&#10;passed&#10;failed"></textarea>
+          <p class="hint">Enter one <code>passed</code> or <code>failed</code> per line, including the original run. Leave blank if you have no retry data.</p>
+          <button id="run">Run investigation <span aria-hidden="true">→</span></button>
+          <div class="error" id="error"></div>
+          <div class="note"><span>●</span><div>No repository connection: this demo analyzes only the log and outcomes you submit. It never executes commands or edits code. Avoid secrets and private logs.</div></div>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><h2>Investigation report</h2><span class="step">02 / FINDINGS</span></div>
+        <div id="empty" class="empty"><div><div class="empty-icon">⌕</div><strong>Ready when you are</strong>Paste a CI log, add any retry outcomes, and start the investigation.</div></div>
+        <div id="results" class="results"></div>
+      </article>
+    </section>
+    <footer>Agents communicate over A2A task requests; findings are deterministic and eval-friendly in this first version.</footer>
+  </main>
+  <script>
+    const select = document.querySelector('#scenario');
+    const logInput = document.querySelector('#log');
+    const attemptsInput = document.querySelector('#attempts');
+    const runButton = document.querySelector('#run');
+    const errorBox = document.querySelector('#error');
+    let scenarios = [];
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+
+    async function loadScenarios() {
+      const response = await fetch('/api/scenarios');
+      scenarios = await response.json();
+      select.innerHTML = '<option value="">Use my own input</option>' + scenarios.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('');
+      select.addEventListener('change', updateScenario);
+      updateScenario();
+    }
+
+    function updateScenario() {
+      const scenario = scenarios.find(item => item.id === select.value);
+      if (!scenario) {
+        document.querySelector('#scenarioDescription').textContent = 'Paste your CI log and provide retry outcomes if available.';
+        logInput.value = '';
+        attemptsInput.value = '';
+        return;
+      }
+      document.querySelector('#scenarioDescription').textContent = `${scenario.description} ${scenario.attempts.length} recorded attempt${scenario.attempts.length === 1 ? '' : 's'}.`;
+      logInput.value = scenario.log;
+      attemptsInput.value = scenario.attempts.map(attempt => attempt.status).join('\n');
+    }
+
+    function renderReport(payload) {
+      const diagnosis = payload.diagnosis;
+      const badgeLabels = {regression:'REGRESSION', flaky:'FLAKY TEST', environment:'ENVIRONMENT', inconclusive:'INCONCLUSIVE'};
+      const evidence = diagnosis.evidence.length
+        ? diagnosis.evidence.map(item => `<div class="evidence-item"><b>line ${item.line}</b>${escapeHtml(item.text)}</div>`).join('')
+        : '<div class="evidence-item">No specific log evidence was found.</div>';
+      const attempts = diagnosis.attempt_evidence.length
+        ? diagnosis.attempt_evidence.map(item => `<span class="attempt ${item.status === 'failed' ? 'failed' : ''}">#${item.attempt} ${escapeHtml(item.status)}</span>`).join('')
+        : '<span class="chip">No retry observations</span>';
+      const trace = payload.trace.map(item => {
+        if (item.type === 'discovery') return `<div class="trace-row"><div class="trace-icon">◎</div><div><div class="trace-title">Discovered ${escapeHtml(item.agent)}</div><div class="trace-detail">${escapeHtml(item.skills.join(', '))} · A2A ${escapeHtml(item.protocol_version)}</div></div><span class="trace-state">CARD</span></div>`;
+        return `<div class="trace-row"><div class="trace-icon">↗</div><div><div class="trace-title">Task sent to ${escapeHtml(item.agent)}</div><div class="trace-detail">Task ${escapeHtml(item.task_id)} · ${escapeHtml(item.duration_ms)} ms</div></div><span class="trace-state">${escapeHtml(item.state).replace('TASK_STATE_', '')}</span></div>`;
+      }).join('');
+      document.querySelector('#empty').style.display = 'none';
+      const results = document.querySelector('#results');
+      results.style.display = 'block';
+      results.innerHTML = `
+        <div class="diagnosis">
+          <span class="badge" data-kind="${escapeHtml(diagnosis.classification)}">● ${escapeHtml(badgeLabels[diagnosis.classification] || diagnosis.classification)}</span>
+          <h2 class="result-title">${escapeHtml(diagnosis.title)}</h2>
+          <p class="reason">${escapeHtml(diagnosis.reason)}</p>
+          <div class="meta"><span class="chip">Confidence ${Math.round(diagnosis.confidence * 100)}%</span><span class="chip">${escapeHtml(diagnosis.test_name || 'Test not identified')}</span><span class="chip">${diagnosis.attempts_observed} attempts</span></div>
+        </div>
+        <div class="section"><h3>Suggested next step</h3><div class="recommend">${escapeHtml(diagnosis.recommendation)}</div></div>
+        <div class="section"><h3>Log evidence</h3><div class="evidence">${evidence}</div></div>
+        <div class="section"><h3>Retry observations</h3><div class="attempts">${attempts}</div></div>
+        <div class="section"><h3>A2A task trace</h3><div class="trace">${trace}</div></div>`;
+    }
+
+    runButton.addEventListener('click', async () => {
+      errorBox.style.display = 'none';
+      runButton.disabled = true;
+      runButton.textContent = 'Agents are investigating…';
+      try {
+        const attempts = attemptsInput.value.split(/[\n,]+/).map(status => status.trim().toLowerCase()).filter(Boolean);
+        const response = await fetch('/api/triage', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({log: logInput.value, attempts})
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || 'The investigation failed.');
+        renderReport(payload);
+      } catch (error) {
+        errorBox.textContent = error.message;
+        errorBox.style.display = 'block';
+      } finally {
+        runButton.disabled = false;
+        runButton.innerHTML = 'Run investigation <span aria-hidden="true">→</span>';
+      }
+    });
+
+    loadScenarios().catch(error => {
+      errorBox.textContent = `Could not load demo scenarios: ${error.message}`;
+      errorBox.style.display = 'block';
+    });
+  </script>
+</body>
+</html>

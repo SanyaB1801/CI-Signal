@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ci-a2a-triage"
+version = "0.1.0"
+description = "A local A2A-powered CI failure triage demo with deterministic evaluations."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "a2a-sdk[http-server]>=1.3.0,<2.0",
+  "httpx>=0.27",
+  "uvicorn>=0.30",
+]
+
+[project.scripts]
+ci-triage = "ci_triage.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ci_triage = ["data/*.json", "static/*.html"]
